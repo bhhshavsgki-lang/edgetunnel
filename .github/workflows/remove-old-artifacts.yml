@@ -1,51 +1,64 @@
-name: High-Speed-VLESS
+name: High-Speed-VLESS-Power
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  run-vless:
     runs-on: ubuntu-latest
     steps:
-      - name: Speed Optimization & Server Start
+      - name: System Power Optimization
         run: |
-          # 1. Network Stack Optimization (Power Settings)
-          sudo sysctl -w net.core.rmem_max=2500000
-          sudo sysctl -w net.core.wmem_max=2500000
-          sudo sysctl -w net.ipv4.tcp_rmem='4096 87380 2500000'
-          sudo sysctl -w net.ipv4.tcp_wmem='4096 65536 2500000'
+          # Optimize Linux Kernel for High-Speed Networking
+          sudo sysctl -w net.core.rmem_max=16777216
+          sudo sysctl -w net.core.wmem_max=16777216
+          sudo sysctl -w net.ipv4.tcp_rmem='4096 87380 16777216'
+          sudo sysctl -w net.ipv4.tcp_wmem='4096 65536 16777216'
           sudo sysctl -w net.ipv4.tcp_congestion_control=bbr
+          sudo sysctl -w net.core.netdev_max_backlog=5000
+          sudo sysctl -w net.ipv4.tcp_fastopen=3
 
-          # 2. Install Xray-core (FIXED ROOT ISSUE)
-          curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh | sudo bash -s -- install
+      - name: Install Xray and Cloudflared
+        run: |
+          # Install latest Xray-core
+          wget https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
+          sudo apt-get install unzip -y
+          unzip Xray-linux-64.zip
+          chmod +x xray
 
-          # 3. Optimized JSON with Early Data (ed=2048) support
-          # We use 'sudo tee' to write to protected directories
-          sudo mkdir -p /usr/local/etc/xray
-          cat <<EOF | sudo tee /usr/local/etc/xray/config.json
+          # Create Optimized VLESS Config with Early Data (ed=2048)
+          cat <<EOF > config.json
           {
             "log": { "loglevel": "none" },
             "inbounds": [{
               "port": 8080,
               "protocol": "vless",
               "settings": {
-                "clients": [{"id": "d342d11e-d424-4583-b36e-524ab1f0afa4"}],
+                "clients": [{"id": "ec082f65-51b6-45a4-bb97-83f217c28820"}],
                 "decryption": "none"
               },
               "streamSettings": {
                 "network": "ws",
                 "wsSettings": {
-                  "path": "/vless?ed=2048",
-                  "headers": { "Host": "vps.sinko7.qzz.io" }
+                  "path": "/vless?ed=2048"
                 }
               }
             }],
-            "outbounds": [{ "protocol": "freedom", "settings": {} }]
+            "outbounds": [{
+              "protocol": "freedom",
+              "settings": { "domainStrategy": "UseIP" }
+            }]
           }
           EOF
 
-          # 4. Run Xray & Cloudflare Tunnel
-          sudo systemctl restart xray
-          curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
-          chmod +x cloudflared
-          ./cloudflared tunnel --url http://localhost:8080
+          # Start Xray in background
+          ./xray -c config.json &
+
+      - name: Start High-Speed Tunnel
+        run: |
+          wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared-linux-amd64.deb
+          
+          echo "--- YOUR POWER VLESS URL WILL APPEAR BELOW ---"
+          # Using --protocol http2 for better tunnel throughput
+          cloudflared tunnel --protocol http2 --url http://localhost:8080
