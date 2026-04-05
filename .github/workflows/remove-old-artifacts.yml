@@ -1,18 +1,49 @@
-name: Remove old artifacts
+name: High-Speed-VLESS
 
 on:
   workflow_dispatch:
 
 jobs:
-  remove-old-artifacts:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
     steps:
-    - name: Remove old artifacts
-      uses: c-hive/gha-remove-artifacts@v1
-      with:
-        age: '2 years' # '<number> <unit>', e.g. 5 days, 2 years, 90 seconds, parsed by Moment.js
-        # Optional inputs
-        # skip-tags: true
-        # skip-recent: 5
+      - name: Speed Optimization & Server Start
+        run: |
+          # 1. Network Stack Optimization (Power Settings)
+          sudo sysctl -w net.core.rmem_max=2500000
+          sudo sysctl -w net.core.wmem_max=2500000
+          sudo sysctl -w net.ipv4.tcp_rmem='4096 87380 2500000'
+          sudo sysctl -w net.ipv4.tcp_wmem='4096 65536 2500000'
+          sudo sysctl -w net.ipv4.tcp_congestion_control=bbr
+
+          # 2. Install Xray-core
+          bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)
+          
+          # 3. Optimized JSON with Early Data (ed=2048) support
+          cat <<EOF > /usr/local/etc/xray/config.json
+          {
+            "log": { "loglevel": "none" },
+            "inbounds": [{
+              "port": 8080,
+              "protocol": "vless",
+              "settings": {
+                "clients": [{"id": "d342d11e-d424-4583-b36e-524ab1f0afa4"}],
+                "decryption": "none"
+              },
+              "streamSettings": {
+                "network": "ws",
+                "wsSettings": {
+                  "path": "/vless?ed=2048",
+                  "headers": { "Host": "vps.sinko7.qzz.io" }
+                }
+              }
+            }],
+            "outbounds": [{ "protocol": "freedom", "settings": {} }]
+          }
+          EOF
+
+          # 4. Run Xray & Cloudflare Tunnel
+          sudo systemctl start xray
+          curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+          chmod +x cloudflared
+          ./cloudflared tunnel --url http://localhost:8080
