@@ -1,13 +1,4 @@
-name: High-Speed-VLESS
-
-on:
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Speed Optimization & Server Start
+- name: Speed Optimization & Server Start
         run: |
           # 1. Network Stack Optimization (Power Settings)
           sudo sysctl -w net.core.rmem_max=2500000
@@ -16,11 +7,13 @@ jobs:
           sudo sysctl -w net.ipv4.tcp_wmem='4096 65536 2500000'
           sudo sysctl -w net.ipv4.tcp_congestion_control=bbr
 
-          # 2. Install Xray-core
-          bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)
-          
+          # 2. Install Xray-core (FIXED ROOT ISSUE)
+          curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh | sudo bash -s -- install
+
           # 3. Optimized JSON with Early Data (ed=2048) support
-          cat <<EOF > /usr/local/etc/xray/config.json
+          # We use 'sudo tee' to write to protected directories
+          sudo mkdir -p /usr/local/etc/xray
+          cat <<EOF | sudo tee /usr/local/etc/xray/config.json
           {
             "log": { "loglevel": "none" },
             "inbounds": [{
@@ -43,7 +36,7 @@ jobs:
           EOF
 
           # 4. Run Xray & Cloudflare Tunnel
-          sudo systemctl start xray
+          sudo systemctl restart xray
           curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
           chmod +x cloudflared
           ./cloudflared tunnel --url http://localhost:8080
